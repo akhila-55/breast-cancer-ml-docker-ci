@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.git/
+.github/
+test_*.py
+breast_cancer_v1_100.csv
+release_candidate/
