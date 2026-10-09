@@ -1,7 +1,9 @@
 __pycache__/
-*.pyc
+*.py[cod]
 .git/
 .github/
+.venv/
+venv/
+.env
 test_*.py
 breast_cancer_v1_100.csv
-release_candidate/
