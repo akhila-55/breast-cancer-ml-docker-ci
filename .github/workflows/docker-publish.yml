@@ -1,0 +1,78 @@
+
+name: Build Test and Publish Breast Cancer ML
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: breast-cancer-ml
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t breast-cancer-ml:ci .
+
+      - name: Start test container
+        run: |
+          docker run -d \
+            --name breast-cancer-ci \
+            -p 5001:5000 \
+            breast-cancer-ml:ci
+
+      - name: Test API health endpoint
+        run: |
+          for attempt in {1..20}; do
+            if curl --fail --silent \
+              http://localhost:5001/; then
+              echo "Health check passed."
+              exit 0
+            fi
+
+            echo "Waiting for API..."
+            sleep 3
+          done
+
+          echo "Health check failed."
+          docker logs breast-cancer-ci
+          exit 1
+
+      - name: Remove test container
+        if: always()
+        run: docker rm -f breast-cancer-ci || true
+
+      - name: Prepare lowercase GHCR image name
+        run: |
+          IMAGE_ID="ghcr.io/${GITHUB_REPOSITORY_OWNER}/breast-cancer-ml"
+          IMAGE_ID=$(echo "$IMAGE_ID" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_ID=$IMAGE_ID" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            docker login ghcr.io \
+            -u "${{ github.actor }}" \
+            --password-stdin
+
+      - name: Tag tested image
+        run: |
+          docker tag breast-cancer-ml:ci "$IMAGE_ID:latest"
+          docker tag breast-cancer-ml:ci "$IMAGE_ID:sha-${GITHUB_SHA}"
+
+      - name: Publish image to GHCR
+        run: |
+          docker push "$IMAGE_ID:latest"
+          docker push "$IMAGE_ID:sha-${GITHUB_SHA}"
